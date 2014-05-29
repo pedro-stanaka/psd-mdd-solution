@@ -3,10 +3,7 @@ package br.uel.mdd.wave;
 import com.google.common.io.LittleEndianDataInputStream;
 import com.google.common.io.LittleEndianDataOutputStream;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 
 
 /**
@@ -20,7 +17,6 @@ public class Wave {
     private double[] dataValues;
     private byte[] rawData;
     private LittleEndianDataInputStream stream;
-    private int dataSize;
 
     /**
      * @TODO documentation here
@@ -34,13 +30,13 @@ public class Wave {
             if(is.markSupported()){
                 is.mark(this.header.getSubChunk2Size()+2);
             }
-            this.stream = new LittleEndianDataInputStream(is);
-            this.readData();
+            this.rawData = new byte[this.header.getSubChunk2Size()];
+            is.read(this.rawData);
             if(is.markSupported()){
                 try {
                     is.reset();
-                    this.rawData = new byte[this.header.getSubChunk2Size()];
-                    is.read(this.rawData);
+                    this.stream = new LittleEndianDataInputStream(is);
+                    this.readData();
                 } catch (IOException ioe){
                     ioe.printStackTrace();
                 }
@@ -51,6 +47,27 @@ public class Wave {
             e.printStackTrace();
         }
     }
+
+
+    public Wave(double[] values, WaveHeader header){
+        this.dataValues = values;
+        this.header = header;
+        int subChunk2Size = values.length * this.header.getBytesPerSample();
+        this.header.setSubChunk2Size(subChunk2Size);
+        this.header.setChunkSize(subChunk2Size+36);
+    }
+
+    public Wave(byte[] binData, WaveHeader header){
+        this.header = header;
+        this.rawData = binData;
+        ByteArrayInputStream li = new ByteArrayInputStream(this.rawData);
+
+    }
+
+    private void readFromRaw(){
+
+    }
+
 
     /**
      * @TODO documentation here
@@ -121,8 +138,11 @@ public class Wave {
 
             FileOutputStream fos = new FileOutputStream(fileName);
 
+            WaveHeader header = this.header;
             int subChunk2Size = values.length * bytesPerSample;
-            this.header.setSubChunk2Size(subChunk2Size);
+            header.setSubChunk2Size(subChunk2Size);
+            header.setChunkSize(subChunk2Size+36);
+
             fos.write(header.getRawHeader());
             LittleEndianDataOutputStream outputStream = new LittleEndianDataOutputStream(fos);
             write(values, bytesPerSample, outputStream);
@@ -131,7 +151,6 @@ public class Wave {
         } catch (IOException e) {
             e.printStackTrace();
         }
-
     }
 
     private void write(double[] values, int bytesPerSample, LittleEndianDataOutputStream outputStream) throws IOException {
@@ -176,9 +195,33 @@ public class Wave {
 
     public void setDataValues(double[] dataValues) {
         this.dataValues = dataValues;
+        this.fixHeader();
+    }
+
+    private void fixHeader() {
+        this.header.setSubChunk2Size(this.getDataValues().length * this.header.getBytesPerSample());
+        this.header.setChunkSize(36+this.header.getSubChunk2Size());
     }
 
     public byte[] getRawData() {
         return rawData;
     }
+
+    public void saveRaw(String s) throws IOException {
+        File f = new File(s);
+        if(f.exists()) f.delete();
+        FileOutputStream fos = new FileOutputStream(s);
+        fos.write(this.header.getRawHeader());
+        fos.write(this.rawData);
+        fos.close();
+    }
+
+
+    public void setRawData(byte[] rawData) {
+        this.rawData = rawData.clone();
+        System.out.println("Gravando dados: " + rawData.length);
+        this.header.setSubChunk2Size(rawData.length);
+        this.header.setChunkSize(36+rawData.length);
+    }
+
 }
