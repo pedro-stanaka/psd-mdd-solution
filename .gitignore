@@ -105,3 +105,6 @@ nb-configuration.xml
 # KDE directory preferences
 .directory
 
+
+src/main/resources/
+!src/main/resources/.keep
