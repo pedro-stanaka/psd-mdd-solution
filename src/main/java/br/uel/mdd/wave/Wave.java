@@ -201,6 +201,8 @@ public class Wave {
     private void fixHeader() {
         this.header.setSubChunk2Size(this.getDataValues().length * this.header.getBytesPerSample());
         this.header.setChunkSize(36+this.header.getSubChunk2Size());
+        this.header.setByteRate(this.header.getSampleRate() * this.header.getNumChannels() * this.header.getBytesPerSample());
+        this.header.setBlockAlign(this.header.getNumChannels() * this.header.getBytesPerSample());
     }
 
     public byte[] getRawData() {

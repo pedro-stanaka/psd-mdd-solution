@@ -1,6 +1,13 @@
 package br.uel.mdd;
 
+import br.uel.mdd.utils.MyArrayUtils;
 import br.uel.mdd.wave.Wave;
+import br.uel.mdd.wave.WaveHeader;
+import math.jwave.Transform;
+import math.jwave.exceptions.JWaveFailure;
+import math.jwave.transforms.FastWaveletTransform;
+import math.jwave.transforms.wavelets.Wavelet;
+import math.jwave.transforms.wavelets.daubechies.Daubechies20;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -15,35 +22,35 @@ public class Processor {
 
     private Wave waveFile;
 
-    private static final String RESOURCES_FOLDER= "src/main/resources";
+    private static final String RESOURCES_FOLDER = "src/main/resources/";
 
-    public Processor(Wave wave){
+    public Processor(Wave wave) {
         this.waveFile = wave;
     }
 
 
-    public Processor putEcho(double seconds){
+    public Processor putEcho(double seconds) {
 
         int valuesSize = waveFile.getDataValues().length;
         try {
-            double samplingFactor = Math.floor(waveFile.getDataValues().length/(waveFile.getHeader().getSampleRate() * seconds));
+            double samplingFactor = Math.floor(waveFile.getDataValues().length / (waveFile.getHeader().getSampleRate() * seconds));
             double[] data = this.downSample(this.waveFile, (int) samplingFactor);
-            int sampleRate = (int) ((int) ((samplingFactor-1)*waveFile.getHeader().getSampleRate())/samplingFactor);
+            int sampleRate = (int) ((int) ((samplingFactor - 1) * waveFile.getHeader().getSampleRate()) / samplingFactor);
 
 
-            int halfSecondSamples = sampleRate/2;
-            double[] dataEcho = Arrays.copyOf(data, data.length + (int)(sampleRate*seconds));
+            int halfSecondSamples = sampleRate / 2;
+            double[] dataEcho = Arrays.copyOf(data, data.length + (int) (sampleRate * seconds));
 
 
             for (int i = 0; i < (seconds / 0.5); i++) {
-                System.arraycopy(data, data.length - halfSecondSamples, dataEcho, data.length+((i)*halfSecondSamples), halfSecondSamples);
+                System.arraycopy(data, data.length - halfSecondSamples, dataEcho, data.length + ((i) * halfSecondSamples), halfSecondSamples);
             }
 
 
-            double gain = 1, step = 1/sampleRate*seconds;
+            double gain = 1, step = 1 / sampleRate * seconds;
             for (int i = data.length; i < dataEcho.length; i++) {
-                dataEcho[i] = dataEcho[i]*gain;
-                gain-=step;
+                dataEcho[i] = dataEcho[i] * gain;
+                gain -= step;
             }
 
             this.waveFile.setDataValues(dataEcho);
@@ -57,8 +64,50 @@ public class Processor {
         return null;
     }
 
+    public double[] lowPassFilter(double[] freqValues, int cutThreshold) {
+        double[] result = Arrays.copyOf(freqValues, freqValues.length);
+        Arrays.fill(result, cutThreshold, freqValues.length, 0.0);
+        return result;
+    }
+
+
+    public int findNextTwoPotency(int value) {
+        return (int) Math.pow(2, (int) (Math.log((double) value) / Math.log(2))+1);
+    }
+
+    public static int findSampleFromSampleRate(int dataLength, int sampleRate, int desiredFreq) {
+        return ((desiredFreq * dataLength) / (sampleRate / 2));
+    }
+
+
+    public double[] highPassFilter(double[] freqValues, int cutThreshold) {
+        double[] result = freqValues.clone();
+        Arrays.fill(result, 0, cutThreshold, 0.0);
+        return result;
+    }
+
+    private double[] applyHighPass(int cutFreq, double[] dataValues, int sampleRate) {
+        Wavelet wavelet = new Daubechies20();
+        Transform transform = null;
+        try {
+            transform = new Transform(new FastWaveletTransform(wavelet));
+
+            int nextTwoPotency = findNextTwoPotency(dataValues.length);
+            int cut = findSampleFromSampleRate(nextTwoPotency, sampleRate, cutFreq);
+
+            double[] values = Arrays.copyOf(dataValues, nextTwoPotency);
+            double[] fftRes;
+            fftRes = transform.forward(values);
+            double[] newVals = highPassFilter(fftRes, cut);
+            return Arrays.copyOf(transform.reverse(newVals), dataValues.length);
+        } catch (JWaveFailure jWaveFailure) {
+            jWaveFailure.printStackTrace();
+            return null;
+        }
+    }
+
     /**
-     * @param wave Wave instance
+     * @param wave           Wave instance
      * @param samplingFactor An positive integer greater than one. Should not be very big, otherwise aliasing
      * @return WaveProcessor The instance of this class (this).
      * @TODO documentation here
@@ -70,7 +119,7 @@ public class Processor {
         double[] newData = new double[newLength];
         int j = 0;
         for (int i = 0; i < wave.getDataValues().length; i++) {
-            if(i%samplingFactor != 0){
+            if (i % samplingFactor != 0) {
                 newData[j++] = wave.getDataValues()[i];
             }
         }
@@ -78,10 +127,21 @@ public class Processor {
     }
 
 
-
-
-    public void saveNewWave(String fileName){
-        this.waveFile.saveFile(this.waveFile.getDataValues(), fileName);
+    public void saveNewWave(String fileName) {
+        this.waveFile.saveFile(this.waveFile.getDataValues(), RESOURCES_FOLDER + fileName);
     }
 
+    public Processor toStereo() {
+        double[] low = applyHighPass(1000, waveFile.getDataValues(), waveFile.getHeader().getSampleRate());
+        double[] result;
+
+        result = MyArrayUtils.concatenateInsert(low, waveFile.getDataValues());
+
+        WaveHeader header = waveFile.getHeader();
+        header.setNumChannels(2);
+        this.waveFile.setHeader(header);
+
+        this.waveFile.setDataValues(result);
+        return this;
+    }
 }
