@@ -10,7 +10,7 @@ import math.jwave.transforms.wavelets.Wavelet;
 import math.jwave.transforms.wavelets.daubechies.Daubechies20;
 
 import java.io.IOException;
-import java.util.Arrays;
+import java.util.*;
 
 /**
  * @author ${user}
@@ -72,7 +72,7 @@ public class Processor {
 
 
     public int findNextTwoPotency(int value) {
-        return (int) Math.pow(2, (int) (Math.log((double) value) / Math.log(2))+1);
+        return (int) Math.pow(2, (int) (Math.log((double) value) / Math.log(2)) + 1);
     }
 
     public static int findSampleFromSampleRate(int dataLength, int sampleRate, int desiredFreq) {
@@ -144,4 +144,57 @@ public class Processor {
         this.waveFile.setDataValues(result);
         return this;
     }
+
+    public boolean isHumanVoice() {
+        double[] data = waveFile.getDataValues();
+        PriorityQueue<Value> q = new PriorityQueue<Value>(100, new Comparator<Value>() {
+            @Override
+            public int compare(Value o1, Value o2) {
+                return (o1.getAmplitude() > o2.getAmplitude()) ? -1 : (o1.getAmplitude() == o2.getAmplitude()) ? 0 : 1;
+            }
+        });
+
+
+        List<Value> positions = new ArrayList<Value>();
+
+        for (int i = 0; i < data.length; i++) {
+            Value value = new Value(i, data[i]);
+            q.add(value);
+        }
+
+        Value v = q.poll();
+        while (v.getAmplitude() == positions.get(3 - 1).getAmplitude()) {
+            positions.add(v);
+            v = q.poll();
+        }
+        int lowBoundary = findSampleFromSampleRate(waveFile.getDataValues().length, waveFile.getHeader().getSampleRate(), 85);
+        int highBoundary = findSampleFromSampleRate(waveFile.getDataValues().length)
+        boolean isHumanVoice = true;
+        for (Value position : positions) {
+            isHumanVoice = isHumanVoice && (position.getPos() < 220);
+        }
+
+
+
+        return false;
+    }
+
+    private class Value {
+        private int pos;
+        private double amplitude;
+
+        private Value(int pos, double amplitude) {
+            this.pos = pos;
+            this.amplitude = amplitude;
+        }
+
+        public int getPos() {
+            return pos;
+        }
+
+        public double getAmplitude() {
+            return amplitude;
+        }
+    }
+
 }

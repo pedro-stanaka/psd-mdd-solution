@@ -1,6 +1,7 @@
 package br.uel.mdd;
 
 import br.uel.mdd.wave.Wave;
+import math.jwave.exceptions.JWaveFailure;
 
 /**
  * Hello world!
@@ -8,9 +9,8 @@ import br.uel.mdd.wave.Wave;
  */
 public class Main
 {
-    public static void main( String[] args )
-    {
-        ex2();
+    public static void main( String[] args ) throws JWaveFailure {
+
     }
 
 
@@ -25,6 +25,18 @@ public class Main
         Wave wave = new Wave("/22.wav");
         Processor processor = new Processor(wave);
         processor.toStereo().saveNewWave("edited_22_stereo.wav");
+    }
+
+    private static void ex5(){
+        Wave wave= new Wave("/22.wav");
+        Processor processor = new Processor(wave);
+
+        if (processor.isHumanVoice()){
+            System.out.println("HUMAN VOICE");
+        } else {
+            System.out.println("NOT HUMAN VOICE");
+        }
+
     }
 
 }
