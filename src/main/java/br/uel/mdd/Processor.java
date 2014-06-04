@@ -6,11 +6,13 @@ import br.uel.mdd.wave.WaveHeader;
 import math.jwave.Transform;
 import math.jwave.exceptions.JWaveFailure;
 import math.jwave.transforms.FastWaveletTransform;
+import math.jwave.transforms.WaveletPacketTransform;
+import math.jwave.transforms.wavelets.Haar1;
 import math.jwave.transforms.wavelets.Wavelet;
 import math.jwave.transforms.wavelets.daubechies.Daubechies20;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.Arrays;
 
 /**
  * @author ${user}
@@ -146,34 +148,44 @@ public class Processor {
     }
 
     public boolean isHumanVoice() {
-        double[] data = waveFile.getDataValues();
-        PriorityQueue<Value> q = new PriorityQueue<Value>(100, new Comparator<Value>() {
-            @Override
-            public int compare(Value o1, Value o2) {
-                return (o1.getAmplitude() > o2.getAmplitude()) ? -1 : (o1.getAmplitude() == o2.getAmplitude()) ? 0 : 1;
+        Transform transform;
+        try {
+            transform = new Transform(new WaveletPacketTransform(new Haar1()));
+
+
+            assert transform != null;
+            double[] dataFreq;
+            double[] data = Arrays.copyOf(waveFile.getDataValues(), findNextTwoPotency(waveFile.getDataValues().length));
+
+            dataFreq = transform.forward(data);
+
+            int lowBoundary = findSampleFromSampleRate(dataFreq.length, waveFile.getHeader().getSampleRate(), 65);
+            int highBoundary = findSampleFromSampleRate(dataFreq.length, waveFile.getHeader().getSampleRate(), 255);
+
+            double energy = getEnergy(Arrays.copyOfRange(dataFreq, lowBoundary, highBoundary));
+//            System.out.println("ENERGY " + space + " " + energy);
+            double energyTotal = getEnergy(dataFreq);
+//            System.out.println("ENERGY TOTAL " + space + " " + energyTotal);
+            double perc = (energy * 100)/energyTotal;
+//            System.out.println("PERC: " + perc);
+
+//            System.out.println("BOUNDARIES:\tM="+lowBoundary + "  H="+ highBoundary + "  DIFF=" + (highBoundary-lowBoundary));
+
+//            ChartCreator cc = new ChartCreator(space);
+//            cc.addValues(dataFreq);
+//            System.out.println(dataFreq.length);
+//            cc.createLineChart("DFT", "X", "Y");
+
+
+//            System.out.println("\n\n");
+            if (perc > 44 || perc < 1.0){
+                return false;
+            }else{
+                return true;
             }
-        });
-
-
-        List<Value> positions = new ArrayList<Value>();
-
-        for (int i = 0; i < data.length; i++) {
-            Value value = new Value(i, data[i]);
-            q.add(value);
+        } catch (JWaveFailure jWaveFailure) {
+            jWaveFailure.printStackTrace();
         }
-
-        Value v = q.poll();
-        while (v.getAmplitude() == positions.get(3 - 1).getAmplitude()) {
-            positions.add(v);
-            v = q.poll();
-        }
-        int lowBoundary = findSampleFromSampleRate(waveFile.getDataValues().length, waveFile.getHeader().getSampleRate(), 85);
-        int highBoundary = findSampleFromSampleRate(waveFile.getDataValues().length)
-        boolean isHumanVoice = true;
-        for (Value position : positions) {
-            isHumanVoice = isHumanVoice && (position.getPos() < 220);
-        }
-
 
 
         return false;
@@ -195,6 +207,16 @@ public class Processor {
         public double getAmplitude() {
             return amplitude;
         }
+    }
+
+    private double getEnergy(double[] data){
+        double energy = 0;
+
+        for (int i = 0; i < data.length; i++) {
+            energy += Math.pow(data[i], 2);
+        }
+
+        return energy;
     }
 
 }
