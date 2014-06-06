@@ -10,7 +10,7 @@ import math.jwave.exceptions.JWaveFailure;
 public class Main
 {
     public static void main( String[] args ) throws JWaveFailure {
-        ex5();
+        ex3();
     }
 
 
@@ -28,7 +28,7 @@ public class Main
     }
 
     private static void ex5(){
-        Wave wave= new Wave("/04.wav");
+        Wave wave= new Wave("/dangerousjob.wav");
         Processor processor = new Processor(wave);
 
         if (processor.isHumanVoice()){
@@ -36,6 +36,22 @@ public class Main
         } else {
             System.out.println("NOT HUMAN VOICE");
         }
+    }
+
+    private static void ex3(){
+        Wave wave = new Wave("/WelcomeRuidoso.wav");
+        Processor processor = new Processor(wave);
+
+        processor.removeNoiseFft("welcome").saveNewWave("welcome_denoised");
+
+
+
+//        processor = new Processor(new Wave("/WelcomeRuidoso.wav"));
+//        processor.removeNoiseFft("ruidoso");
+//
+//         processor = new Processor(new Wave("/Noise.wav"));
+//        processor.removeNoiseFft("noise");
+
     }
 
 }

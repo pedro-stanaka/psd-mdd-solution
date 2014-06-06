@@ -3,6 +3,7 @@ package br.uel.mdd;
 import br.uel.mdd.utils.MyArrayUtils;
 import br.uel.mdd.wave.Wave;
 import br.uel.mdd.wave.WaveHeader;
+import com.google.common.primitives.Doubles;
 import math.jwave.Transform;
 import math.jwave.exceptions.JWaveFailure;
 import math.jwave.transforms.FastWaveletTransform;
@@ -13,6 +14,8 @@ import math.jwave.transforms.wavelets.daubechies.Daubechies20;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * @author ${user}
@@ -64,6 +67,26 @@ public class Processor {
         }
 
         return null;
+    }
+
+    /**
+     *
+     * @param freqValues values returned from fft
+     * @param freqPass Start of the stop band in Hz
+     * @param attenuationDegree A value of attenuation from 1 to 10
+     * @return filteredValues
+     */
+    public double[] fineLowPass(double[] freqValues, int freqPass, int attenuationDegree){
+
+        int lowerBound = findSampleFromSampleRate(freqValues.length, waveFile.getHeader().getSampleRate(), freqPass);
+
+        List<Double> valuesList = Doubles.asList(freqValues);
+        double max =  Collections.max(valuesList);
+        double[] result = freqValues.clone();
+
+        Arrays.fill(result, lowerBound, result.length, max/attenuationDegree);
+
+        return result;
     }
 
     public double[] lowPassFilter(double[] freqValues, int cutThreshold) {
@@ -166,7 +189,7 @@ public class Processor {
 //            System.out.println("ENERGY " + space + " " + energy);
             double energyTotal = getEnergy(dataFreq);
 //            System.out.println("ENERGY TOTAL " + space + " " + energyTotal);
-            double perc = (energy * 100)/energyTotal;
+            double perc = (energy * 100) / energyTotal;
 //            System.out.println("PERC: " + perc);
 
 //            System.out.println("BOUNDARIES:\tM="+lowBoundary + "  H="+ highBoundary + "  DIFF=" + (highBoundary-lowBoundary));
@@ -178,9 +201,9 @@ public class Processor {
 
 
 //            System.out.println("\n\n");
-            if (perc > 44 || perc < 1.0){
+            if (perc > 44 || perc < 1.0) {
                 return false;
-            }else{
+            } else {
                 return true;
             }
         } catch (JWaveFailure jWaveFailure) {
@@ -191,25 +214,50 @@ public class Processor {
         return false;
     }
 
-    private class Value {
-        private int pos;
-        private double amplitude;
+    public Processor removeNoiseFft(String fileName) {
+        FourierTransform transform = new FourierTransform();
+        double[] values = Arrays.copyOf(this.waveFile.getDataValues(), findNextTwoPotency(waveFile.getDataValues().length));
+        double[] fftResult = transform.fft(values, true);
 
-        private Value(int pos, double amplitude) {
-            this.pos = pos;
-            this.amplitude = amplitude;
-        }
+        double[] realFilteredSignal = fineLowPass(fftResult, 3000, 10);
 
-        public int getPos() {
-            return pos;
-        }
+        double[] ifftResults = transform.ifft(realFilteredSignal, mirrorReal(realFilteredSignal));
 
-        public double getAmplitude() {
-            return amplitude;
-        }
+        this.waveFile.setDataValues(ifftResults);
+
+        return this;
     }
 
-    private double getEnergy(double[] data){
+    public double[] bandPassFilter(double[] freqValues, int bandBegin, int bandEnd, int sampleRate, int aPass, int aStop){
+        int lowerBound = findSampleFromSampleRate(freqValues.length, sampleRate, bandBegin);
+        int upperBound = findSampleFromSampleRate(freqValues.length, sampleRate, bandEnd);
+
+        System.out.println(lowerBound);
+        System.out.println(upperBound);
+
+        double[] result = Arrays.copyOf(freqValues, freqValues.length);
+        for (int i = 0; i < lowerBound; i++) {
+            if (result[i] > aPass){
+
+            }
+        }
+        System.out.println(result.length);
+        Arrays.fill(result, 0, lowerBound, 0.0);
+        Arrays.fill(result, upperBound, freqValues.length, 0.0);
+        return result;
+    }
+
+    public double[] mirrorReal(double[] real){
+        int j = 0;
+        double[] mirror = new double[real.length];
+        for (int i = real.length - 1; i >= 0; i--) {
+            mirror[j] = real[i];
+        }
+        return real;
+    }
+
+
+    private double getEnergy(double[] data) {
         double energy = 0;
 
         for (int i = 0; i < data.length; i++) {
@@ -217,6 +265,10 @@ public class Processor {
         }
 
         return energy;
+    }
+
+    private double[] getRealPart(double[] fftResult){
+        return Arrays.copyOf(fftResult, fftResult.length/2);
     }
 
 }
