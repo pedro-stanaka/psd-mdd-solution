@@ -10,15 +10,15 @@ import math.jwave.exceptions.JWaveFailure;
 public class Main
 {
     public static void main( String[] args ) throws JWaveFailure {
-        ex3();
+        ex1();
     }
 
 
 
     private static void ex1(){
-        Wave wave = new Wave("/welcome.wav");
+        Wave wave = new Wave("/22.wav");
         Processor processor = new Processor(wave);
-        processor.putEcho(1.5).saveNewWave("edited_wave22.wav");
+        processor.putEcho(1.5).saveNewWave("echo_wav.wav");
     }
 
     private static void ex2(){

@@ -40,6 +40,7 @@ public class Processor {
 
         int valuesSize = waveFile.getDataValues().length;
         try {
+
             double samplingFactor = Math.floor(waveFile.getDataValues().length / (waveFile.getHeader().getSampleRate() * seconds));
             double[] data = this.downSample(this.waveFile, (int) samplingFactor);
             int sampleRate = (int) ((int) ((samplingFactor - 1) * waveFile.getHeader().getSampleRate()) / samplingFactor);
@@ -51,15 +52,18 @@ public class Processor {
 
             for (int i = 0; i < (seconds / 0.5); i++) {
                 System.arraycopy(data, data.length - halfSecondSamples, dataEcho, data.length + ((i) * halfSecondSamples), halfSecondSamples);
+                double gain = 1, step = (double) 1 / sampleRate * 0.5;
+                for (int j = data.length; j < dataEcho.length; j++) {
+                    dataEcho[j] = dataEcho[j] * gain;
+                    gain -= step;
+                    if (j%3==0 || j ==0) System.out.println(gain);
+                }
             }
 
 
-            double gain = 1, step = 1 / sampleRate * seconds;
-            for (int i = data.length; i < dataEcho.length; i++) {
-                dataEcho[i] = dataEcho[i] * gain;
-                gain -= step;
-            }
-
+//            System.out.println(data.length);
+//            System.out.println(dataEcho.length);
+//            System.out.println("ECHO");
             this.waveFile.setDataValues(dataEcho);
 
             this.waveFile.getHeader().setSampleRate(sampleRate);
@@ -67,13 +71,13 @@ public class Processor {
         } catch (IOException e) {
             e.printStackTrace();
         }
-
         return null;
     }
 
     public double[] lowPassFilter(double[] freqValues, int cutThreshold) {
         double[] result = Arrays.copyOf(freqValues, freqValues.length);
         Arrays.fill(result, cutThreshold, freqValues.length, 0.0);
+
         return result;
     }
 
