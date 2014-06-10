@@ -57,7 +57,7 @@ public class FourierTransform {
     }
 
 
-    public double[] fft(double []values,boolean direct){
+    public double[] fft(double[] values){
         double[] im = new double[values.length];
         return fastFourierTransform(values, im, direct);
     }

@@ -10,6 +10,7 @@ import math.jwave.transforms.FastWaveletTransform;
 import math.jwave.transforms.WaveletPacketTransform;
 import math.jwave.transforms.wavelets.Haar1;
 import math.jwave.transforms.wavelets.Wavelet;
+import math.jwave.transforms.wavelets.daubechies.Daubechies2;
 import math.jwave.transforms.wavelets.daubechies.Daubechies20;
 import sun.audio.AudioPlayer;
 import sun.audio.AudioStream;
@@ -223,7 +224,7 @@ public class Processor {
 
         double[] finalValues = new double[soundValues.length];
         double[] noiseWindowed = Arrays.copyOfRange(noiseValues, 22 * windowSize, 23 * windowSize);
-        double[] noiseFft = getRealPart(transform.fft(noiseWindowed, true));
+        double[] noiseFft = getRealPart(transform.fft(noiseWindowed));
 
         List<Value> pitches = getPitches(noiseFft, 3);
 
@@ -231,7 +232,7 @@ public class Processor {
         for (int i = 0; i < windowsNumber ; i++) {
             double[] soundWindowed = Arrays.copyOfRange(soundValues, i * windowSize, (i + 1) * windowSize);
 
-            double[] soundWindowedFft  = transform.fft(soundWindowed, true);
+            double[] soundWindowedFft  = transform.fft(soundWindowed);
             double[] soundWindowedFftReal = getRealPart(soundWindowedFft);
             for (Value pitch : pitches) {
                 int pitchFrequency = pitch.getPos();
@@ -267,10 +268,201 @@ public class Processor {
         return this;
     }
 
+    public Processor waveletNoiseRemoval(Wave noise) throws JWaveFailure {
+        double[] values = Arrays.copyOf(waveFile.getDataValues(),
+                findNextTwoPotency(waveFile.getDataValues().length));
+        Wavelet waveletFilter = new Daubechies2();
+        Transform transform = new Transform(new FastWaveletTransform(waveletFilter));
+
+
+        int windowSize = 2048;
+        int numberOfWindows = values.length/windowSize;
+
+
+        double threshold;
+        for (int i = 0; i < numberOfWindows; i++) {
+            double[] soundWindowed = Arrays.copyOfRange(values, i * windowSize, (i+i) * windowSize);
+            double[] hilbSound = transform.forward(soundWindowed);
+
+        }
+
+
+
+
+        return this;
+    }
+
+    public Processor partyRemoveNoise(Wave noise){
+        int windowSize = 2048;
+        double[] noiseValues = noise.getDataValues();
+        double[] soundValues = waveFile.getDataValues();
+
+        FourierTransform transform = new FourierTransform();
+
+        double[] finalValues = new double[soundValues.length];
+//        for (int i = 0; i < noiseValues.length; i++) {
+        double[] noiseWindowed = Arrays.copyOfRange(noiseValues, 22 * windowSize, 23 * windowSize);
+//        }
+        double[] noiseFft = getRealPart(transform.fft(noiseWindowed));
+
+        List<Value> pitches = getPitches(noiseFft, 3);
+
+        int windowsNumber = soundValues.length / windowSize;
+        for (int i = 0; i < windowsNumber; i++) {
+            double[] soundWindowed = Arrays.copyOfRange(soundValues, i * windowSize, (i + 1) * windowSize);
+
+//            TODO Tentar com duas abordagens (Mirror e tradicional)
+            double[] soundWindowedFft = transform.fft(soundWindowed);
+            double[] soundWindowedFftReal = getRealPart(soundWindowedFft);
+            System.out.println("Sound FFT Real: " + getEnergy(soundWindowedFftReal));
+            for (int j = 0; j < pitches.size(); j++) {
+                Value pitch = pitches.get(j);
+                int pitchFrequency = pitch.getPos();
+
+                double ratio = Math.pow(pitch.getAmplitude(), 2) / getEnergy(noiseFft);
+
+                double oldSampleValue = Math.pow(soundWindowedFftReal[pitchFrequency], 2);
+
+                soundWindowedFftReal[pitchFrequency] *= (1 - ratio);
+
+                double amountToBeDistributed = oldSampleValue - soundWindowedFftReal[pitchFrequency];
+
+                double ratioDistribution = amountToBeDistributed / (soundWindowedFftReal.length - 1);
+
+                for (int k = 0; k < soundWindowedFftReal.length; k++) {
+                    if (k != pitchFrequency) {
+                        double energySignal = Math.pow(soundWindowedFftReal[k], 2);
+                        energySignal += ratioDistribution;
+                        if (soundWindowedFftReal[k] < 0) {
+                            soundWindowedFftReal[k] = Math.sqrt(energySignal) * -1;
+                        } else {
+                            soundWindowedFftReal[k] = Math.sqrt(energySignal);
+                        }
+                    }
+                }
+                double[] ifft = transform.ifft(soundWindowedFftReal, mirrorReal(soundWindowedFftReal));
+                System.arraycopy(ifft, 0, finalValues, i * windowSize, windowSize);
+            }
+            System.out.println("Sound After Energy: " + getEnergy(soundWindowedFftReal));
+        }
+
+
+        System.out.println("\n" +
+                "     .,,-~&,               ,~\"~.\n" +
+                "    { /`,__\\`.             > ::::\n" +
+                "   { `}'~.~/\\ \\           <, ?::;\n" +
+                "   {`}'\\._/  ) }           l_  f\n" +
+                "    ,__/ l_,'`/          ,__}--{_.\n" +
+                "   {  `.__.' (          /         }\n" +
+                "    \\ \\    )  )        /          !\n" +
+                "     \\'\\`-'`-'        /  ,    1  J;\n" +
+                "      \\ \\___l,-_,___.'  /1    !  Y\n" +
+                "       k____-~'-l_____.' |    l /\n" +
+                "      /===#=l            l     f\n" +
+                "     f      8            I===I=I\n" +
+                "     t    ! 8            f     }\n" +
+                "      Y    \\l            |     }\n" +
+                "       \\    \\            l    Y;\n" +
+                "        `.   \\           }    |\n" +
+                "         !`,  \\          |    |\n" +
+                "         l /   }        ,1    |\n" +
+                "         l/   /         !l   ,l\n" +
+                "         /  ,'          ! \\    \\\n" +
+                "        /  /!           !  \\    \\\n" +
+                "       /_,f_l           l___j.   \\\n" +
+                "      (_ \\l_ `_     ,.-'`--(  `.,'`.\n" +
+                "       Y\\__Y`--'    `-'~x__J    j'  >\n" +
+                "                              ,/ ,^'\n" +
+                "                             f__J\n\n");
+
+        this.waveFile.setDataValues(finalValues);
+
+        return this;
+
+    }
+
+    public Processor subMachineRemoveNoise(Wave noise){
+
+        int windowSize = 2048;
+        FourierTransform transform = new FourierTransform();
+        double[] noiseValues = noise.getDataValues();
+        double[] soundValues = waveFile.getDataValues();
+
+        double[] finalValues = new double[soundValues.length];
+//        for (int i = 0; i < noiseValues.length; i++) {
+        double[] noiseWindowed = Arrays.copyOfRange(noiseValues, 22 * windowSize, 23 * windowSize);
+//        }
+        double[] noiseFft = getRealPart(transform.fft(noiseWindowed));
+
+        List<Value> pitches = getPitches(noiseFft, 3);
+
+        int windowsNumber = soundValues.length / windowSize;
+        for (int i = 0; i < windowsNumber; i++) {
+            double[] soundWindowed = Arrays.copyOfRange(soundValues, i * windowSize, (i + 1) * windowSize);
+
+//            TODO Tentar com duas abordagens (Mirror e tradicional)
+
+            double[] soundWindowedFft = transform.fft(soundWindowed);
+            double[] soundWindowedFftReal = getRealPart(soundWindowedFft);
+            System.out.println("Sound FFT Real: " + getEnergy(soundWindowedFftReal));
+            for (int j = 0; j < pitches.size(); j++) {
+                Value pitch = pitches.get(j);
+                int pitchFrequency = pitch.getPos();
+
+                double ratio = Math.pow(pitch.getAmplitude(), 2) / getEnergy(noiseFft);
+
+                double oldSampleValue = Math.pow(soundWindowedFftReal[pitchFrequency], 2);
+
+                soundWindowedFftReal[pitchFrequency] *= (1 - ratio);
+
+                double amountToBeDistributed = oldSampleValue - soundWindowedFftReal[pitchFrequency];
+
+                double ratioDistribution = amountToBeDistributed / (soundWindowedFftReal.length - 1);
+
+                for (int k = 0; k < soundWindowedFftReal.length; k++) {
+                    if (k != pitchFrequency) {
+                        double energySignal = Math.pow(soundWindowedFftReal[k], 2);
+                        energySignal += ratioDistribution;
+                        if (soundWindowedFftReal[k] < 0) {
+                            soundWindowedFftReal[k] = Math.sqrt(energySignal) * -1;
+                        } else {
+                            soundWindowedFftReal[k] = Math.sqrt(energySignal);
+                        }
+                    }
+                }
+                double[] ifft = transform.ifft(soundWindowedFftReal, mirrorReal(soundWindowedFftReal));
+                System.arraycopy(ifft, 0, finalValues, i * windowSize, windowSize);
+            }
+            System.out.println("Sound After Energy: " + getEnergy(soundWindowedFftReal));
+        }
+
+
+
+
+        System.out.println("                       .-----------------TTTT_-----_______\n" +
+                "                        /''''''''''(______O] ----------____  \\______/]_\n" +
+                "     __...---'\"\"\"\\_ --''   Q                               ___________@\n" +
+                " |'''                   ._   _______________=---------\"\"\"\"\"\"\"\n" +
+                " |                ..--''|   l L |_l   |\n" +
+                " |          ..--''      .  /-___j '   '\n" +
+                " |    ..--''           /  ,       '   '\n" +
+                " |--''                /           `    \\\n" +
+                "                      L__'         \\    -\n" +
+                "                                    -    '-.\n" +
+                "                                     '.    /\n" +
+                "                                       '-./\n" +
+                "METRALHADORA ALEMÃ OU DE ISRAEL..... (8)");
+
+        this.waveFile.setDataValues(finalValues);
+
+
+        return this;
+    }
+
     public Processor removeNoiseFft(String fileName) {
         FourierTransform transform = new FourierTransform();
         double[] values = Arrays.copyOf(this.waveFile.getDataValues(), findNextTwoPotency(waveFile.getDataValues().length));
-        double[] fftResult = transform.fft(values, true);
+        double[] fftResult = transform.fft(values);
 
         double[] realFilteredSignal = fineLowPass(fftResult, 3000, 10);
 
