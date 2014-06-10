@@ -39,19 +39,11 @@ public class Main
     }
 
     private static void ex3(){
-        Wave wave = new Wave("/WelcomeRuidoso.wav");
-        Processor processor = new Processor(wave);
-
-        processor.removeNoiseFft("welcome").saveNewWave("welcome_denoised");
-
-
-
-//        processor = new Processor(new Wave("/WelcomeRuidoso.wav"));
-//        processor.removeNoiseFft("ruidoso");
-//
-//         processor = new Processor(new Wave("/Noise.wav"));
-//        processor.removeNoiseFft("noise");
-
+        Wave sound = new Wave("/WelcomeRuidoso.wav");
+        Wave noise = new Wave("/Noise.wav");
+        Processor processor = new Processor(sound);
+        processor.removeWhiteNoise(noise, sound).saveNewWave("welcome_denoised.wav");
+        processor.playMusic(Main.class.getResourceAsStream("welcome_denoised.wav"));
     }
 
 }

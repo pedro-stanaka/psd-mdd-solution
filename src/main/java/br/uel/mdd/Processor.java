@@ -11,11 +11,12 @@ import math.jwave.transforms.WaveletPacketTransform;
 import math.jwave.transforms.wavelets.Haar1;
 import math.jwave.transforms.wavelets.Wavelet;
 import math.jwave.transforms.wavelets.daubechies.Daubechies20;
+import sun.audio.AudioPlayer;
+import sun.audio.AudioStream;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
+import java.io.InputStream;
+import java.util.*;
 
 /**
  * @author ${user}
@@ -67,26 +68,6 @@ public class Processor {
         }
 
         return null;
-    }
-
-    /**
-     *
-     * @param freqValues values returned from fft
-     * @param freqPass Start of the stop band in Hz
-     * @param attenuationDegree A value of attenuation from 1 to 10
-     * @return filteredValues
-     */
-    public double[] fineLowPass(double[] freqValues, int freqPass, int attenuationDegree){
-
-        int lowerBound = findSampleFromSampleRate(freqValues.length, waveFile.getHeader().getSampleRate(), freqPass);
-
-        List<Double> valuesList = Doubles.asList(freqValues);
-        double max =  Collections.max(valuesList);
-        double[] result = freqValues.clone();
-
-        Arrays.fill(result, lowerBound, result.length, max/attenuationDegree);
-
-        return result;
     }
 
     public double[] lowPassFilter(double[] freqValues, int cutThreshold) {
@@ -214,6 +195,78 @@ public class Processor {
         return false;
     }
 
+
+    /**
+     * @param freqValues        values returned from fft
+     * @param freqPass          Start of the stop band in Hz
+     * @param attenuationDegree A value of attenuation from 1 to 10
+     * @return filteredValues
+     */
+    public double[] fineLowPass(double[] freqValues, int freqPass, int attenuationDegree) {
+
+        int lowerBound = findSampleFromSampleRate(freqValues.length, waveFile.getHeader().getSampleRate(), freqPass);
+
+        List<Double> valuesList = Doubles.asList(freqValues);
+        double max = Collections.max(valuesList);
+        double[] result = freqValues.clone();
+
+        Arrays.fill(result, lowerBound, result.length, max / attenuationDegree);
+
+        return result;
+    }
+
+    public Processor removeWhiteNoise(Wave noise, Wave sound) {
+        int windowSize = 2048;
+        double[] noiseValues = noise.getDataValues();
+        double[] soundValues = sound.getDataValues();
+        FourierTransform transform = new FourierTransform();
+
+        double[] finalValues = new double[soundValues.length];
+        double[] noiseWindowed = Arrays.copyOfRange(noiseValues, 22 * windowSize, 23 * windowSize);
+        double[] noiseFft = getRealPart(transform.fft(noiseWindowed, true));
+
+        List<Value> pitches = getPitches(noiseFft, 3);
+
+        int windowsNumber = soundValues.length / windowSize;
+        for (int i = 0; i < windowsNumber ; i++) {
+            double[] soundWindowed = Arrays.copyOfRange(soundValues, i * windowSize, (i + 1) * windowSize);
+
+            double[] soundWindowedFft  = transform.fft(soundWindowed, true);
+            double[] soundWindowedFftReal = getRealPart(soundWindowedFft);
+            for (Value pitch : pitches) {
+                int pitchFrequency = pitch.getPos();
+
+                double ratio = Math.pow(pitch.getAmplitude(), 2) / getEnergy(noiseFft);
+
+                double oldSampleValue = Math.pow(soundWindowedFftReal[pitchFrequency], 2);
+
+                soundWindowedFftReal[pitchFrequency] *= ratio;
+
+                double amountToBeDistributed = oldSampleValue - soundWindowedFftReal[pitchFrequency];
+
+                double ratioDistribution = amountToBeDistributed / (soundWindowedFftReal.length - 1);
+
+                for (int k = 0; k < soundWindowedFftReal.length; k++) {
+                    if (k != pitchFrequency) {
+                        double energySignal = Math.pow(soundWindowedFftReal[k], 2);
+                        energySignal += ratioDistribution;
+                        if (soundWindowedFftReal[k] < 0) {
+                            soundWindowedFftReal[k] = Math.sqrt(energySignal) * -1;
+                        } else {
+                            soundWindowedFftReal[k] = Math.sqrt(energySignal);
+                        }
+                    }
+                }
+
+                double[] ifft = transform.ifft(soundWindowedFftReal, mirrorReal(soundWindowedFftReal));
+                System.arraycopy(ifft, 0, finalValues, i * windowSize, windowSize);
+            }
+        }
+
+        waveFile.setDataValues(finalValues);
+        return this;
+    }
+
     public Processor removeNoiseFft(String fileName) {
         FourierTransform transform = new FourierTransform();
         double[] values = Arrays.copyOf(this.waveFile.getDataValues(), findNextTwoPotency(waveFile.getDataValues().length));
@@ -228,7 +281,14 @@ public class Processor {
         return this;
     }
 
-    public double[] bandPassFilter(double[] freqValues, int bandBegin, int bandEnd, int sampleRate, int aPass, int aStop){
+
+    public Processor removeWhiteNoise(Wave whiteNoise) {
+
+
+        return this;
+    }
+
+    public double[] bandPassFilter(double[] freqValues, int bandBegin, int bandEnd, int sampleRate, int aPass, int aStop) {
         int lowerBound = findSampleFromSampleRate(freqValues.length, sampleRate, bandBegin);
         int upperBound = findSampleFromSampleRate(freqValues.length, sampleRate, bandEnd);
 
@@ -237,7 +297,7 @@ public class Processor {
 
         double[] result = Arrays.copyOf(freqValues, freqValues.length);
         for (int i = 0; i < lowerBound; i++) {
-            if (result[i] > aPass){
+            if (result[i] > aPass) {
 
             }
         }
@@ -247,7 +307,7 @@ public class Processor {
         return result;
     }
 
-    public double[] mirrorReal(double[] real){
+    public double[] mirrorReal(double[] real) {
         int j = 0;
         double[] mirror = new double[real.length];
         for (int i = real.length - 1; i >= 0; i--) {
@@ -267,8 +327,64 @@ public class Processor {
         return energy;
     }
 
-    private double[] getRealPart(double[] fftResult){
-        return Arrays.copyOf(fftResult, fftResult.length/2);
+    private double[] getRealPart(double[] fftResult) {
+        return Arrays.copyOf(fftResult, fftResult.length / 2);
+    }
+
+    public List<Value> getPitches(double[] signal, int maxElements) {
+
+        PriorityQueue<Value> q = new PriorityQueue<Value>(100, new Comparator<Value>() {
+            @Override
+            public int compare(Value o1, Value o2) {
+                return (o1.getAmplitude() > o2.getAmplitude()) ? -1 : (o1.getAmplitude() == o2.getAmplitude()) ? 0 : 1;
+            }
+        });
+
+        for (int i = 0; i < signal.length; i++) {
+            Value value = new Value(i, signal[i]);
+            q.add(value);
+        }
+
+        List<Value> positions = new ArrayList<Value>();
+
+        for (int i = 0; i < maxElements; i++) {
+            positions.add(q.poll());
+        }
+
+        Value v = q.poll();
+        while (v.getAmplitude() == positions.get(maxElements - 1).getAmplitude()) {
+            positions.add(v);
+            v = q.poll();
+        }
+
+        return positions;
+    }
+
+    private class Value {
+        private int pos;
+        private double amplitude;
+
+        private Value(int pos, double amplitude) {
+            this.pos = pos;
+            this.amplitude = amplitude;
+        }
+
+        public int getPos() {
+            return pos;
+        }
+
+        public double getAmplitude() {
+            return amplitude;
+        }
+    }
+
+    public void playMusic(InputStream file) {
+        try {
+            AudioStream audioStream = new AudioStream(file);
+            AudioPlayer.player.start(audioStream);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
 }
