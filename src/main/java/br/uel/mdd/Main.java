@@ -21,6 +21,15 @@ public class Main
         processor.putEcho(1.5).saveNewWave("echo_wav.wav");
     }
 
+    private static void ex4Sub(){
+        Wave wave = new Wave("/22.wav");
+        Wave noise = new Wave("/Noise.wav");
+        Processor processor = new Processor(wave);
+        processor.partyRemoveNoise(noise).saveNewWave("create_party.wav");
+    }
+
+
+
     private static void ex2(){
         Wave wave = new Wave("/22.wav");
         Processor processor = new Processor(wave);
